@@ -5,9 +5,7 @@ from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
 
-
 # Step 1: Define the necessary parameters for our simulation
-
 def encodage_matrice(bits, G, k):
     bits_reshaped = bits.reshape(len(bits)//k, k)
     bits_encodes = bits_reshaped @ G % 2
@@ -58,6 +56,7 @@ def result_comp(received_signals, G): ##########################################
         lignes_correspondante.append(ligne_correspondante)
     return lignes_correspondante # estimé
 
+
 def add_noise(signals, sigma):
     noise = np.random.normal(0, sigma, signals.shape)
     return signals + noise
@@ -67,6 +66,7 @@ def train_neural_network(X_train, Y_train, X_test, Y_test, noise_level, epochs=1
     # lignes_correspondante : vecteur de taille 8
     # message : vré de taille 8
     
+    # RESHAPE ICI
 
     # Initialize the model
     model = Sequential([
@@ -93,7 +93,6 @@ def train_neural_network(X_train, Y_train, X_test, Y_test, noise_level, epochs=1
     return model
 
 num_bits = 8**5 # Pour avoir un nombre de bits multiple de 8, Number of bits for each simulation
-simulated_BER = [] # Store simulated BER values
 G = np.array([[1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
               [1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
               [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -105,12 +104,14 @@ G = np.array([[1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 k, N = np.shape(G)
 n_combinations = 2**k
 M = BPSK_modulation(mat_combi(G, k))
-Eb_No_dB = np.linspace(0, 10, 22)  # Eb/N0 values in dB
+Eb_No_dB = 1  # Eb/N0 values in dB, on prend 1 pour les raisons évoqués dans le papier voir (a) polar code figure vert
 Eb_No_lin = 10**(Eb_No_dB / 10)  # Convert Eb/N0 values to linear scale
 
 #%%
 
-X_train = mat()
+bits = mat().flatten()
+encoded_bits = encodage_matrice(bits, G, k) 
+X_train = BPSK_modulation(encoded_bits)
 Y_train = result_comp(X_train, G)
 
 X_test = [0,1,1,0,1,0,1,1]
@@ -122,31 +123,30 @@ prediction = trained_model.predict(X_test)
 
 #%%
 
-# Simulation
-for Eb_No in Eb_No_lin:
-    # Generate random bits
-    bits = np.random.randint(0, 2, num_bits)
-    encoded_bits = encodage_matrice(bits, G, k)    
-    # BPSK Modulation/mapping
-    transmitted_signals = BPSK_modulation(encoded_bits)
-    
-    # AWGN Channel/add noise
-    sigma = np.sqrt(10**(-Eb_No / 10))                           # A peaufiner
-    noise = np.random.normal(0, sigma, len(transmitted_signals))
-    received_signals = transmitted_signals + noise
-    
-    # Threshold detection
-    detected_bits = threshold_detection(received_signals)
-    estimate_signals = result_comp(received_signals, G) # On garde ça pour comparer si jamais
-    estimate_signals = np.array(estimate_signals).flatten()  # Flatten the array from (64, 16) to (1024,)
-    estimate_signals2 = reseau_neurone(received_signals)
+ 
+# Generate random bits
+bits = np.random.randint(0, 2, num_bits)
+encoded_bits = encodage_matrice(bits, G, k)    
+# BPSK Modulation/mapping
+transmitted_signals = BPSK_modulation(encoded_bits)
 
-    # Count errors
-    errors = count_errors(transmitted_signals, estimate_signals)
-    
-    # Calculate BER
-    BER = errors / num_bits
-    simulated_BER.append(BER)
+# AWGN Channel/add noise
+sigma = np.sqrt(10**(-Eb_No_lin / 10))                           # A peaufiner
+noise = np.random.normal(0, sigma, len(transmitted_signals))
+received_signals = transmitted_signals + noise
+
+# Threshold detection
+detected_bits = threshold_detection(received_signals)
+estimate_signals = result_comp(received_signals, G) # On garde ça pour comparer si jamais
+estimate_signals = np.array(estimate_signals).flatten()  # Flatten the array from (64, 16) to (1024,)
+estimate_signals2 = train_neural_network(received_signals)
+
+# Count errors
+errors = count_errors(transmitted_signals, estimate_signals)
+
+# Calculate BER
+BER = errors / num_bits
+simulated_BER.append(BER)
 
 # Theoretical BER calculation
 theoretical_BER = theoretical_ber(Eb_No_lin)
