@@ -31,7 +31,7 @@ def BPSK_modulation(bits):
     return 2*bits - 1
 
 # Threshold Detection for BPSK
-def threshold_detection(received_signals):
+def threshold_detection(received_signals): #################################################
     return received_signals > 0
 
 # Counting the number of bit errors
@@ -42,7 +42,7 @@ def count_errors(original_bits, detected_bits):
 def theoretical_ber(Eb_No):
     return 0.5 * sp.erfc(np.sqrt(Eb_No))
 
-def result_comp(received_signals, G):
+def result_comp(received_signals, G): ################################################### a voir si on la laisse pour comparer avec les reseaux de neuronnes
     lignes_correspondante = []
     for i in range(len(received_signals)//(2*k)):
         distances = np.sum(np.abs(M - received_signals[16*i:16*(i+1)]), axis=1)
@@ -50,6 +50,10 @@ def result_comp(received_signals, G):
         ligne_correspondante = M[indice_min, :] # Récupère la ligne correspondante de la matrice_combinaisons
         lignes_correspondante.append(ligne_correspondante)
     return lignes_correspondante
+
+
+def reseau_neurone(signal_recu):
+    return 0
 
 num_bits = 8**7 # Pour avoir un nombre de bits multiple de 8, Number of bits for each simulation
 simulated_BER = [] # Store simulated BER values
@@ -65,7 +69,7 @@ k, N = np.shape(G)
 n_combinations = 2**k
 M = BPSK_modulation(mat_combi(G, k))
 Eb_No_dB = np.linspace(0, 10, 22)  # Eb/N0 values in dB
-Eb_No_lin = 10**(Eb_No_dB / 10)  # Convert Eb/N0 values to linear scale
+Eb_No_lin = 10**(-Eb_No_dB / 10)  # Convert Eb/N0 values to linear scale
 
 #%%
 
@@ -78,14 +82,15 @@ for Eb_No in Eb_No_lin:
     transmitted_signals = BPSK_modulation(encoded_bits)
     
     # AWGN Channel/add noise
-    sigma = np.sqrt(1 / (Eb_No))
+    sigma = np.sqrt(Eb_No)
     noise = np.random.normal(0, sigma, len(transmitted_signals))
     received_signals = transmitted_signals + noise
     
     # Threshold detection
     detected_bits = threshold_detection(received_signals)
-    estimate_signals = result_comp(received_signals, G)
+    estimate_signals = result_comp(received_signals, G) # On garde ça pour comparer si jamais
     estimate_signals = np.array(estimate_signals).flatten()  # Flatten the array from (64, 16) to (1024,)
+    estimate_signals2 = reseau_neurone(received_signals)
 
     # Count errors
     errors = count_errors(transmitted_signals, estimate_signals)
@@ -107,4 +112,3 @@ plt.title('BER vs. Eb/N0 for BPSK in AWGN')
 plt.legend()
 plt.grid(True)
 plt.show()
-
