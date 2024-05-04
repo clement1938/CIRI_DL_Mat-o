@@ -5,6 +5,8 @@ from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
 
+#%%
+
 # Step 1: Define the necessary parameters for our simulation
 def encodage_matrice(bits, G, k):
     bits_reshaped = bits.reshape(len(bits)//k, k)
@@ -37,7 +39,7 @@ def BPSK_modulation(bits):
 
 # Threshold Detection for BPSK
 def threshold_detection(received_signals): #################################################
-    return received_signals > 0     # 0.5 pour le réseau de neurones ?
+    return received_signals > 0            #.5 pour le réseau de neurones ?
 
 # Counting the number of bit errors
 def count_errors(original_bits, detected_bits):
@@ -54,19 +56,14 @@ def result_comp(received_signals, G): ##########################################
         indice_min = np.argmin(distances) # Trouve l'indice de la ligne avec la distance minimale (max de vraisemblance)
         ligne_correspondante = M[indice_min, :] # Récupère la ligne correspondante de la matrice_combinaisons
         lignes_correspondante.append(ligne_correspondante)
-    return lignes_correspondante # estimé
+    return np.array(lignes_correspondante) # estimé
 
 
 def add_noise(signals, sigma):
     noise = np.random.normal(0, sigma, signals.shape)
     return signals + noise
 
-def train_neural_network(X_train, Y_train, X_test, Y_test, noise_level, epochs=1024, learning_rate=0.01):  # training
-    # signal recu : vecteur de taille 16
-    # lignes_correspondante : vecteur de taille 8
-    # message : vré de taille 8
-    
-    # RESHAPE ICI
+def train_neural_network(X_train, Y_train, X_test, Y_test, noise_level, epochs=2**10, learning_rate=0.5):  # training
 
     # Initialize the model
     model = Sequential([
@@ -92,7 +89,9 @@ def train_neural_network(X_train, Y_train, X_test, Y_test, noise_level, epochs=1
     
     return model
 
-num_bits = 8**5 # Pour avoir un nombre de bits multiple de 8, Number of bits for each simulation
+#%%
+
+#num_bits = 8**5 # Pour avoir un nombre de bits multiple de 8, Number of bits for each simulation
 G = np.array([[1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
               [1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
               [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -101,25 +100,41 @@ G = np.array([[1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
               [1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0],
               [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
               [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]])
-k, N = np.shape(G)
-n_combinations = 2**k
+k, _ = np.shape(G)
 M = BPSK_modulation(mat_combi(G, k))
-Eb_No_dB = 1  # Eb/N0 values in dB, on prend 1 pour les raisons évoqués dans le papier voir (a) polar code figure vert
-Eb_No_lin = 10**(Eb_No_dB / 10)  # Convert Eb/N0 values to linear scale
+
+Eb_No_lin = 10**(1 / 10)  # Convert Eb/N0 values to linear scale # Eb_No_dB = 1  #Eb/N0 values in dB, on prend 1 pour les raisons évoqués dans le papier voir (a) polar code figure vert
 
 #%%
 
-bits = mat().flatten()
-encoded_bits = encodage_matrice(bits, G, k) 
+encoded_bits = encodage_matrice(mat().flatten(), G, k)
 X_train = BPSK_modulation(encoded_bits)
-Y_train = result_comp(X_train, G)
 
-X_test = [0,1,1,0,1,0,1,1]
-Y_test = result_comp(X_test, G)
+detected_bits = threshold_detection(X_train)
+detected_bits = np.where(detected_bits, 1, -1)
+Y_train = result_comp(detected_bits, G)  
+
+
+encoded_bits_test = encodage_matrice(np.random.randint(0, 2, 8), G, k)
+X_test = BPSK_modulation(encoded_bits_test)
+
+detected_bits_test = threshold_detection(X_test)
+Y_test = result_comp(detected_bits_test, G)
+
+
 
 sigma = 0.1  # Adjust noise level as required
+X_train = X_train.reshape(256, 2*k)
+X_test = X_test.reshape(1, 16)
 trained_model = train_neural_network(X_train, Y_train, X_test, Y_test, sigma)
 prediction = trained_model.predict(X_test)
+
+# Count errors
+errors = count_errors(Y_test, prediction)
+
+# Calculate BER
+#BER = errors / 16
+
 
 #%%
 
@@ -145,7 +160,7 @@ estimate_signals2 = train_neural_network(received_signals)
 errors = count_errors(transmitted_signals, estimate_signals)
 
 # Calculate BER
-BER = errors / num_bits
+BER = errors / (2*num_bits)
 simulated_BER.append(BER)
 
 # Theoretical BER calculation
