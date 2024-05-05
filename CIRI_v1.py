@@ -1,8 +1,14 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sat May  4 16:26:05 2024
+
+@author: 33695
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, log_loss
 from tqdm import tqdm
-import matplotlib.pyplot as plt
 import scipy.special as sp
 from keras.models import Sequential
 from keras.layers import Dense
@@ -82,7 +88,7 @@ def predict(X, parametres):
   Af = activations['A' + str(C)]
   return Af >= 0.5
 
-def deep_neural_network(X, y, hidden_layers = (128, 64, 32), learning_rate = 0.01, n_iter = 2**12):
+def deep_neural_network(X, y, hidden_layers = (128, 64, 32), learning_rate = 0.005, n_iter = 2**14):
     
     # initialisation parametres
     dimensions = list(hidden_layers)
@@ -120,7 +126,7 @@ def deep_neural_network(X, y, hidden_layers = (128, 64, 32), learning_rate = 0.0
     plt.legend()
     plt.show()
 
-    return training_history
+    return training_history, parametres
 
 
 #%% Partie telecom
@@ -249,10 +255,28 @@ estimate_signals = np.array(Y_test).flatten()
 errors = count_errors(bits_neur, estimate_signals)
 print(errors)  # normalement égale à bits_neur car pas de bruit
 
+X_test = X_test.T
 
-X = X_train.T
-y = Y_train.T
-print('dimensions de X:', X.shape)
-print('dimensions de y:', y.shape)
+X_train = X_train.T
+Y_train = Y_train.T
+print('dimensions de X:', X_train.shape)
+print('dimensions de y:', Y_train.shape)
 #%%
-deep_neural_network(X, y)
+training_history, parametres = deep_neural_network(X_train, Y_train)
+#%%
+Y_calcule = predict(X_test, parametres)
+signal_recu = (Y_calcule.T).astype(int).flatten()
+#%%
+
+sigma = 0.01  # Adjust noise level as required
+
+#trained_model = train_neural_network(X_train, Y_train, X_test, Y_test, sigma)
+#prediction = trained_model.predict(X_test)
+#signal_recu = (prediction > 0.5).flatten().astype(int)
+# Count errors
+errors = count_errors(signal_recu, Y_test.flatten())
+
+# Calculate BER
+BER = errors/len(Y_test.flatten())
+
+print("BER = ", BER, "\n", bits_neur,"\n", signal_recu)
