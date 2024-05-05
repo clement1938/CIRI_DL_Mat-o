@@ -34,8 +34,8 @@ def mat():
     return matrice_combinaisons
 
 # BPSK Modulation Function
-def BPSK_modulation(bits):
-    return 2*bits - 1
+def BPSK_modulation(bits):  # A revoir pour envoyer des entiers
+    return (2*bits - 1).astype(int)
 
 # Threshold Detection for BPSK
 def threshold_detection(received_signals): #################################################
@@ -49,12 +49,12 @@ def count_errors(original_bits, detected_bits):
 def theoretical_ber(Eb_No):
     return 0.5 * sp.erfc(np.sqrt(Eb_No))
 
-def result_comp(received_signals, G): ################################################### a voir si on la laisse pour comparer avec les reseaux de neuronnes
+def result_comp(received_signals, G, MAT): ################################################### a voir si on la laisse pour comparer avec les reseaux de neuronnes
     lignes_correspondante = []
     for i in range(len(received_signals)//(2*k)):
         distances = np.sum(np.abs(M - received_signals[16*i:16*(i+1)]), axis=1)
         indice_min = np.argmin(distances) # Trouve l'indice de la ligne avec la distance minimale (max de vraisemblance)
-        ligne_correspondante = M[indice_min, :] # Récupère la ligne correspondante de la matrice_combinaisons
+        ligne_correspondante = MAT[indice_min, :] # Récupère la ligne correspondante de la matrice_combinaisons
         lignes_correspondante.append(ligne_correspondante)
     return np.array(lignes_correspondante) # estimé
 
@@ -101,78 +101,48 @@ G = np.array([[1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
               [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
               [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]])
 k, _ = np.shape(G)
+MAT = mat()
 M = BPSK_modulation(mat_combi(G, k))
 
 Eb_No_lin = 10**(1 / 10)  # Convert Eb/N0 values to linear scale # Eb_No_dB = 1  #Eb/N0 values in dB, on prend 1 pour les raisons évoqués dans le papier voir (a) polar code figure vert
 
 #%%
 
-encoded_bits = encodage_matrice(mat().flatten(), G, k)
-X_train = BPSK_modulation(encoded_bits)
+combi_bits = mat().flatten()
+encoded_bits = encodage_matrice(combi_bits, G, k)
+X_train_flat = BPSK_modulation(encoded_bits) # Pas de buit ajouté pour l'instant
+X_train = X_train_flat.reshape(256, 2*k)
 
-detected_bits = threshold_detection(X_train)
-detected_bits = np.where(detected_bits, 1, -1)
-Y_train = result_comp(detected_bits, G)  
+# X_train = threshold_detection(X_train)
 
+Y_train = result_comp(X_train_flat, G, MAT) # Evidament égale à "mat" mais nous vérfions tout de même
+estimate_signals = np.array(Y_train).flatten()  # Flatten the array from (256, 16) to (1024,)
 
-encoded_bits_test = encodage_matrice(np.random.randint(0, 2, 8), G, k)
-X_test = BPSK_modulation(encoded_bits_test)
+nb = 1*k
+bits_neur = np.random.randint(0, 2, nb)
+encoded_bits_test = encodage_matrice(bits_neur, G, k)
+X_test_flat = BPSK_modulation(encoded_bits_test)
+X_test = X_test_flat.reshape(nb // k, 2*k)
 
-detected_bits_test = threshold_detection(X_test)
-Y_test = result_comp(detected_bits_test, G)
+# detected_bits_test = threshold_detection(X_test)
 
+Y_test = result_comp(X_test_flat, G, MAT)
+estimate_signals = np.array(Y_test).flatten()
 
-
-sigma = 0.1  # Adjust noise level as required
-X_train = X_train.reshape(256, 2*k)
-X_test = X_test.reshape(1, 16)
-trained_model = train_neural_network(X_train, Y_train, X_test, Y_test, sigma)
-prediction = trained_model.predict(X_test)
-
-# Count errors
-errors = count_errors(Y_test, prediction)
-
-# Calculate BER
-#BER = errors / 16
-
+# ptit test
+errors = count_errors(bits_neur, estimate_signals)
+print(errors)  # normalement égale à bits_neur car pas de bruit
 
 #%%
 
- 
-# Generate random bits
-bits = np.random.randint(0, 2, num_bits)
-encoded_bits = encodage_matrice(bits, G, k)    
-# BPSK Modulation/mapping
-transmitted_signals = BPSK_modulation(encoded_bits)
-
-# AWGN Channel/add noise
-sigma = np.sqrt(10**(-Eb_No_lin / 10))                           # A peaufiner
-noise = np.random.normal(0, sigma, len(transmitted_signals))
-received_signals = transmitted_signals + noise
-
-# Threshold detection
-detected_bits = threshold_detection(received_signals)
-estimate_signals = result_comp(received_signals, G) # On garde ça pour comparer si jamais
-estimate_signals = np.array(estimate_signals).flatten()  # Flatten the array from (64, 16) to (1024,)
-estimate_signals2 = train_neural_network(received_signals)
-
+sigma = 0.01  # Adjust noise level as required
+trained_model = train_neural_network(X_train, Y_train, X_test, Y_test, sigma)
+prediction = trained_model.predict(X_test)
+signal_recu = (prediction > 0.5).flatten()
 # Count errors
-errors = count_errors(transmitted_signals, estimate_signals)
+errors = count_errors(Y_test.flatten(), signal_recu)
 
 # Calculate BER
-BER = errors / (2*num_bits)
-simulated_BER.append(BER)
+BER = errors/len(Y_test.flatten())
 
-# Theoretical BER calculation
-theoretical_BER = theoretical_ber(Eb_No_lin)
-
-# Plotting
-plt.figure(figsize=(10, 6))
-plt.semilogy(Eb_No_dB, simulated_BER, 'o-', label='Simulated BER')
-plt.semilogy(Eb_No_dB, theoretical_BER, 'r--', label='Theoretical BER')
-plt.xlabel('Eb/N0 (dB)')
-plt.ylabel('Bit Error Rate (BER)')
-plt.title('BER vs. Eb/N0 for BPSK in AWGN')
-plt.legend()
-plt.grid(True)
-plt.show()
+print("BER = ", BER)
