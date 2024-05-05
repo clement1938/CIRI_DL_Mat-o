@@ -10,9 +10,22 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, log_loss
 from tqdm import tqdm
 import scipy.special as sp
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.optimizers import Adam
+
+
+#%%
+
+
+#%%
+# from numba import jit, njit
+# from multiprocessing import Pool
+
+# def execute_task(args):
+#     # Votre code ici
+#     return result
+
+# if __name__ == '__main__':
+#     with Pool(processes=4) as pool:
+#         results = pool.map(execute_task, list_of_args)
 
 #%% Partie réseau neuronaux
 
@@ -28,6 +41,7 @@ def initialisation(dimensions):
         parametres['b' + str(c)] = np.random.randn(dimensions[c], 1)
 
     return parametres
+
 
 def forward_propagation(X, parametres): # , activation):
   
@@ -47,14 +61,6 @@ def forward_propagation(X, parametres): # , activation):
 
   return activations
 
-# def sigmoid(z):
-#     return 1 / (1 + np.exp(-z))
-
-# def ReLU(z):
-#     if z<0:
-#         return 0
-#     return z
-
 
 def back_propagation(y, parametres, activations):
 
@@ -72,6 +78,7 @@ def back_propagation(y, parametres, activations):
 
   return gradients
 
+
 def update(gradients, parametres, learning_rate):
 
     C = len(parametres) // 2
@@ -82,13 +89,15 @@ def update(gradients, parametres, learning_rate):
 
     return parametres
 
+
 def predict(X, parametres):
   activations = forward_propagation(X, parametres)
   C = len(parametres) // 2
   Af = activations['A' + str(C)]
   return Af >= 0.5
 
-def deep_neural_network(X, y, hidden_layers = (128, 64, 32), learning_rate = 0.005, n_iter = 2**14):
+
+def deep_neural_network(X, y, hidden_layers = (128, 64, 32), learning_rate = 0.005, epochs = 2**10, sigma = 0):
     
     # initialisation parametres
     dimensions = list(hidden_layers)
@@ -98,15 +107,19 @@ def deep_neural_network(X, y, hidden_layers = (128, 64, 32), learning_rate = 0.0
     parametres = initialisation(dimensions)
 
     # tableau numpy contenant les futures accuracy et log_loss
-    training_history = np.zeros((int(n_iter), 2))
+    training_history = np.zeros((int(epochs), 2))
 
     C = len(parametres) // 2
 
+    m,n = X.shape
+
     # gradient descent
-    for i in tqdm(range(n_iter)):
+    for i in tqdm(range(epochs)):
         
-        # X_bruite = X+bruit
-        activations = forward_propagation(X, parametres)
+        # lr = update_learning_rate(learning_rate, i, decay_rate=0.001)
+        
+        X_bruite = X + np.random.normal(0, sigma, (m,n))             # ajout du bruit Gaussien à chauque itération
+        activations = forward_propagation(X_bruite, parametres)
         gradients = back_propagation(y, parametres, activations)
         parametres = update(gradients, parametres, learning_rate)
         Af = activations['A' + str(C)]
@@ -187,31 +200,31 @@ def add_noise(signals, sigma):
     noise = np.random.normal(0, sigma, signals.shape)
     return signals + noise
 
-def train_neural_network(X_train, Y_train, X_test, Y_test, noise_level, epochs=2**10, learning_rate=0.5):  # training
+# def train_neural_network(X_train, Y_train, X_test, Y_test, noise_level, epochs=2**10, learning_rate=0.5):  # training
 
-    # Initialize the model
-    model = Sequential([
-        Dense(16, input_dim=X_train.shape[1], activation='ReLU'),
-        Dense(128, activation='ReLU'),
-        Dense(64, activation='ReLU'),
-        Dense(32, activation='ReLU'),
-        Dense(Y_train.shape[1], activation='sigmoid')
-    ])
+#     # Initialize the model
+#     model = Sequential([
+#         Dense(16, input_dim=X_train.shape[1], activation='ReLU'),
+#         Dense(128, activation='ReLU'),
+#         Dense(64, activation='ReLU'),
+#         Dense(32, activation='ReLU'),
+#         Dense(Y_train.shape[1], activation='sigmoid')
+#     ])
 
-    # Compile the model
-    model.compile(optimizer=Adam(learning_rate=learning_rate), loss='binary_crossentropy', metrics=['accuracy'])
+#     # Compile the model
+#     model.compile(optimizer=Adam(learning_rate=learning_rate), loss='binary_crossentropy', metrics=['accuracy'])
 
-    # Add noise to training data
-    X_train_noisy = add_noise(X_train, noise_level)
+#     # Add noise to training data
+#     X_train_noisy = add_noise(X_train, noise_level)
 
-    # Train the model
-    model.fit(X_train_noisy, Y_train, epochs=epochs, verbose=0)
+#     # Train the model
+#     model.fit(X_train_noisy, Y_train, epochs=epochs, verbose=0)
 
-    # Evaluate the model
-    _, accuracy = model.evaluate(X_test, Y_test)
-    print(f"Accuracy: {accuracy*100:.2f}%")
+#     # Evaluate the model
+#     _, accuracy = model.evaluate(X_test, Y_test)
+#     print(f"Accuracy: {accuracy*100:.2f}%")
     
-    return model
+#     return model
 
 #%%
 
@@ -255,25 +268,23 @@ estimate_signals = np.array(Y_test).flatten()
 errors = count_errors(bits_neur, estimate_signals)
 print(errors)  # normalement égale à bits_neur car pas de bruit
 
-X_test = X_test.T
+X_test = (X_test.T).astype(np.float64)
 
 X_train = X_train.T
 Y_train = Y_train.T
+X_train = X_train.astype(np.float64)
+Y_train = Y_train.astype(np.float64)
 print('dimensions de X:', X_train.shape)
 print('dimensions de y:', Y_train.shape)
 #%%
-training_history, parametres = deep_neural_network(X_train, Y_train)
+
+training_history, parametres = deep_neural_network(X_train, Y_train, epochs=2**12, sigma=0.1)
 #%%
 Y_calcule = predict(X_test, parametres)
 signal_recu = (Y_calcule.T).astype(int).flatten()
 #%%
 
-sigma = 0.01  # Adjust noise level as required
 
-#trained_model = train_neural_network(X_train, Y_train, X_test, Y_test, sigma)
-#prediction = trained_model.predict(X_test)
-#signal_recu = (prediction > 0.5).flatten().astype(int)
-# Count errors
 errors = count_errors(signal_recu, Y_test.flatten())
 
 # Calculate BER
