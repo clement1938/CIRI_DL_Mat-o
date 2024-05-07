@@ -1,150 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.metrics import accuracy_score, log_loss
-from tqdm import tqdm
 import scipy.special as sp
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.optimizers import Adam
+import tensorflow as tf
+from tensorflow.keras.layers import Lambda
 
-#%% Partie réseau neuronaux
-
-def initialisation(dimensions):
-    parametres = {}
-    C = len(dimensions)
-    np.random.seed(1)
-    for c in range(1, C):
-        parametres['W' + str(c)] = np.random.randn(dimensions[c], dimensions[c - 1])
-        parametres['b' + str(c)] = np.random.randn(dimensions[c], 1)
-    return parametres
-
-def sigmoid(z):
-    return 1 / (1 + np.exp(-z))
-
-def ReLU(z):
-    return np.maximum(0, z)
-
-def forward_propagation(X, parametres): # , activation):
-    activations = {'A0': X}
-    C = len(parametres) // 2 
-    for c in range(1, C):
-        Z = parametres['W' + str(c)].dot(activations['A' + str(c - 1)]) + parametres['b' + str(c)]
-        activations['A' + str(c)] = sigmoid(Z) # ReLU
-    Z = parametres['W' + str(C)].dot(activations['A' + str(C - 1)]) + parametres['b' + str(C)]
-    activations['A' + str(C)] = sigmoid(Z) 
-    return activations
-
-def back_propagation(y, parametres, activations):
-    m = y.shape[1]
-    C = len(parametres) // 2
-    dZ = activations['A' + str(C)] - y
-    gradients = {}
-    for c in reversed(range(1, C + 1)):
-      gradients['dW' + str(c)] = 1/m * np.dot(dZ, activations['A' + str(c - 1)].T)
-      gradients['db' + str(c)] = 1/m * np.sum(dZ, axis=1, keepdims=True)
-      if c > 1:
-        dZ = np.dot(parametres['W' + str(c)].T, dZ) * activations['A' + str(c - 1)] * (1 - activations['A' + str(c - 1)])
-    return gradients
-
-# def back_propagation(y, parametres, activations):
-#     m = y.shape[1]
-#     C = len(parametres) // 2
-#     dZ = activations['A' + str(C)] - y
-#     gradients = {}
-  
-#     # sigmoid
-#     gradients['dW' + str(C)] = 1/m * np.dot(dZ, activations['A' + str(C-1)].T)
-#     gradients['db' + str(C)] = 1/m * np.sum(dZ, axis=1, keepdims=True)
-    
-#     dZ = np.dot(parametres['W' + str(C)].T, dZ) * activations['A' + str(C-1)] * (1 - activations['A' + str(C-1)])  # Simplifiable 
-#     # ReLU
-#     for c in reversed(range(1, C)): 
-#       gradients['dW' + str(c)] = 1/m * np.dot(dZ, (activations['A' + str(c)] > 0))
-#       gradients['db' + str(c)] = 1/m * np.sum(dZ, axis=1, keepdims=True)
-#       if c > 1:
-#         dZ = np.dot(parametres['W' + str(c)].T, dZ) * activations['A' + str(c - 1)] * (1 - activations['A' + str(c - 1)]) # Simlpifiable
-#     return gradients
-
-# def back_propagation(y, parameters, activations):
-#     m = y.shape[1]
-#     C = len(parameters) // 2
-#     dZ = activations['A' + str(C)] - y
-#     gradients = {}
-
-#     gradients['dW' + str(C)] = 1/m * np.dot(dZ, activations['A' + str(C-1)].T)
-#     gradients['db' + str(C)] = 1/m * np.sum(dZ, axis=1, keepdims=True)
-
-#     for c in reversed(range(1, C)):
-#         dA = np.dot(parameters['W' + str(c+1)].T, dZ)
-#         dZ = dA * (activations['A' + str(c)] > 0)  # Application de la dérivée de ReLU
-
-#         # if c > 1:
-#         A_prev = activations['A' + str(c-1)]
-#         # else:
-#         #     A_prev = activations['A0']  
-
-#         gradients['dW' + str(c)] = 1/m * np.dot(dZ, A_prev.T)
-#         gradients['db' + str(c)] = 1/m * np.sum(dZ, axis=1, keepdims=True)
-
-#     return gradients
-
-
-def update(gradients, parametres, learning_rate):
-    C = len(parametres) // 2
-    for c in range(1, C + 1):
-        parametres['W' + str(c)] = parametres['W' + str(c)] - learning_rate * gradients['dW' + str(c)]
-        parametres['b' + str(c)] = parametres['b' + str(c)] - learning_rate * gradients['db' + str(c)]
-    return parametres
-
-
-def predict(X, parametres):
-  activations = forward_propagation(X, parametres)
-  C = len(parametres) // 2
-  Af = activations['A' + str(C)]
-  return Af >= 0.5
-
-def update_learning_rate(initial_lr, epoch, decay_rate):
-    return initial_lr * np.exp(-decay_rate * epoch)
-
-def deep_neural_network(X, y, hidden_layers = (128, 64, 32), learning_rate = 0.5, epochs = 2**14, sigma = 0):
-    # initialisation parametres
-    dimensions = list(hidden_layers)
-    dimensions.insert(0, X.shape[0])
-    dimensions.append(y.shape[0])
-    np.random.seed(1)
-    parametres = initialisation(dimensions)
-
-    # tableau numpy contenant les futures accuracy et log_loss
-    training_history = np.zeros((int(epochs), 2))
-    C = len(parametres) // 2
-    m,n = X.shape
-    
-    # gradient descent
-    for i in tqdm(range(epochs)):
-        
-        #lr = update_learning_rate(learning_rate, i, decay_rate=1/epochs)
-        
-        X_bruite = X + np.random.normal(0, sigma, (m,n))             # ajout du bruit Gaussien à chauque itération
-        activations = forward_propagation(X_bruite, parametres)
-        gradients = back_propagation(y, parametres, activations)
-        parametres = update(gradients, parametres, learning_rate)
-        Af = activations['A' + str(C)]
-
-        # calcul du log_loss et de l'accuracy
-        training_history[i, 0] = (log_loss(y.flatten(), Af.flatten()))
-        y_pred = predict(X, parametres)
-        training_history[i, 1] = (accuracy_score(y.flatten(), y_pred.flatten()))
-
-    # Plot courbe d'apprentissage
-    plt.figure(figsize=(12, 4))
-    plt.subplot(1, 2, 1)
-    plt.plot(training_history[:, 0], label='train loss')
-    plt.legend()
-    plt.subplot(1, 2, 2)
-    plt.plot(training_history[:, 1], label='train acc')
-    plt.legend()
-    plt.show()
-
-    return training_history, parametres
-
-#%% Partie telecom
+#%%
 
 # Step 1: Define the necessary parameters for our simulation
 def encodage_matrice(bits, G, k):
@@ -173,12 +36,12 @@ def mat():
     return matrice_combinaisons
 
 # BPSK Modulation Function
-def BPSK_modulation(bits):  
+def BPSK_modulation(bits):  # A revoir pour envoyer des entiers
     return (2*bits - 1).astype(int)
 
 # Threshold Detection for BPSK
-def threshold_detection(received_signals): 
-    return received_signals > 0
+def threshold_detection(received_signals): #################################################
+    return received_signals > 0            #.5 pour le réseau de neurones ?
 
 # Counting the number of bit errors
 def count_errors(original_bits, detected_bits):
@@ -188,7 +51,7 @@ def count_errors(original_bits, detected_bits):
 def theoretical_ber(Eb_No):
     return 0.5 * sp.erfc(np.sqrt(Eb_No))
 
-def result_comp(received_signals, G, MAT):
+def result_comp(received_signals, G, MAT): ################################################### a voir si on la laisse pour comparer avec les reseaux de neuronnes
     lignes_correspondante = []
     for i in range(len(received_signals)//(2*k)):
         distances = np.sum(np.abs(M - received_signals[16*i:16*(i+1)]), axis=1)
@@ -198,11 +61,51 @@ def result_comp(received_signals, G, MAT):
     return np.array(lignes_correspondante) # estimé
 
 
-def add_noise(signals, sigma):
-    noise = np.random.normal(0, sigma, signals.shape)
-    return signals + noise
+# def add_noise(signals, sigma):
+#     noise = np.random.normal(0, sigma, signals.shape)
+#     return signals + noise
+
+
+def train_neural_network(X_train, Y_train, X_test, Y_test, noise_level, epochs=2**10, learning_rate=0.5):
+    model = Sequential([
+        # Ajouter du bruit aux données d'entrée
+        Lambda(lambda x: tf.cast(x, tf.float32) + tf.random.normal(tf.shape(x), mean=0.0, stddev=noise_level)),
+        Dense(16, input_dim=X_train.shape[1], activation='relu'),
+        Dense(128, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(32, activation='relu'),
+        Dense(Y_train.shape[1], activation='sigmoid')
+    ])
+
+    model.compile(optimizer=Adam(learning_rate=learning_rate), loss='binary_crossentropy', metrics=['accuracy'])
+    
+    # Entraîner le modèle
+    model.fit(X_train, Y_train, epochs=epochs, verbose=0)
+
+    # Évaluer le modèle
+    _, accuracy = model.evaluate(X_test, Y_test)
+    print(f"Accuracy: {accuracy*100:.2f}%")
+    
+    return model
+
+    # Compile the model
+    model.compile(optimizer=Adam(learning_rate=learning_rate), loss='binary_crossentropy', metrics=['accuracy'])
+
+    # # Add noise to training data
+    # X_train_noisy = add_noise(X_train, noise_level)  # A changer car le même pour ttes les epochs
+
+    # Train the model
+    model.fit(X_train, Y_train, epochs=epochs, verbose=0)
+
+    # Evaluate the model
+    _, accuracy = model.evaluate(X_test, Y_test)
+    print(f"Accuracy: {accuracy*100:.2f}%")
+    
+    return model
 
 #%%
+
+#num_bits = 8**5 # Pour avoir un nombre de bits multiple de 8, Number of bits for each simulation
 G = np.array([[1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
               [1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
               [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -217,49 +120,83 @@ M = BPSK_modulation(mat_combi(G, k))
 
 Eb_No_lin = 10**(1 / 10)  # Convert Eb/N0 values to linear scale # Eb_No_dB = 1  #Eb/N0 values in dB, on prend 1 pour les raisons évoqués dans le papier voir (a) polar code figure vert
 
+#%%
+
 combi_bits = mat().flatten()
 encoded_bits = encodage_matrice(combi_bits, G, k)
 X_train_flat = BPSK_modulation(encoded_bits) # Pas de buit ajouté pour l'instant
 X_train = X_train_flat.reshape(256, 2*k)
 
+# X_train = threshold_detection(X_train)
+
 Y_train = result_comp(X_train_flat, G, MAT) # Evidament égale à "mat" mais nous vérfions tout de même
 estimate_signals = np.array(Y_train).flatten()  # Flatten the array from (256, 16) to (1024,)
 
-nb = 10*k
+#%%
+
+nb = 80*k
 bits_neur = np.random.randint(0, 2, nb)
 encoded_bits_test = encodage_matrice(bits_neur, G, k)
 X_test_flat = BPSK_modulation(encoded_bits_test)
 X_test = X_test_flat.reshape(nb // k, 2*k)
 
+# detected_bits_test = threshold_detection(X_test)
+
 Y_test = result_comp(X_test_flat, G, MAT)
 estimate_signals = np.array(Y_test).flatten()
 
-X_test = (X_test.T).astype(np.float64)
+# ptit test
+errors = count_errors(bits_neur, estimate_signals)
+print(errors)  # normalement égale à bits_neur car pas de bruit
 
-X_train = X_train.T.astype(np.float64)
-Y_train = Y_train.T.astype(np.float64)
-print('dimensions de X:', X_train.shape)
-print('dimensions de y:', Y_train.shape)
-#%%
-# import threading
-# from moviepy.editor import *
-# audio_path = 'son.mp3'
-# def play_audio(audio_path, delay):
-#     audio_clip = AudioFileClip(audio_path)
-#     audio_clip.preview()  # Jouer l'audio
-# 
-# audio_thread = threading.Thread(target=play_audio, args=(audio_path, 1))
-# audio_thread.start()
+trained_model = train_neural_network(X_train, Y_train, X_test, Y_test, noise_level = 0.0089, epochs=2**12)
+prediction = trained_model.predict(X_test)
+signal_recu = (prediction > 0.5).flatten().astype(int)
+# Count errors
+errors = count_errors(Y_test.flatten(), signal_recu)
 
-
-training_history, parametres = deep_neural_network(X_train, Y_train, epochs=2**14, sigma=0.89)
-
-Y_calcule = predict(X_test, parametres)
-signal_recu = (Y_calcule.T).astype(int).flatten()
-
-errors = count_errors(signal_recu, Y_test.flatten())
 # Calculate BER
 BER = errors/len(Y_test.flatten())
 
-print("BER = ", BER, "\n", bits_neur,"\n", signal_recu)
+print("BER = ", BER) #, "\n", bits_neur,"\n", signal_recu)
 
+
+#%%
+
+# Generate random bits
+# bits = np.random.randint(0, 2, num_bits)
+# encoded_bits = encodage_matrice(bits, G, k)    
+# # BPSK Modulation/mapping
+# transmitted_signals = BPSK_modulation(encoded_bits)
+
+# # AWGN Channel/add noise
+# sigma = np.sqrt(10**(-Eb_No_lin / 10))                           # A peaufiner
+# noise = np.random.normal(0, sigma, len(transmitted_signals))
+# received_signals = transmitted_signals + noise
+
+# # Threshold detection
+# detected_bits = threshold_detection(received_signals)
+# estimate_signals = result_comp(received_signals, G) # On garde ça pour comparer si jamais
+# estimate_signals = np.array(estimate_signals).flatten()  # Flatten the array from (64, 16) to (1024,)
+# estimate_signals2 = train_neural_network(received_signals)
+
+# # Count errors
+# errors = count_errors(transmitted_signals, estimate_signals)
+
+# # Calculate BER
+# BER = errors / (2*num_bits)
+# simulated_BER.append(BER)
+
+# # Theoretical BER calculation
+# theoretical_BER = theoretical_ber(Eb_No_lin)
+
+# # Plotting
+# plt.figure(figsize=(10, 6))
+# plt.semilogy(Eb_No_dB, simulated_BER, 'o-', label='Simulated BER')
+# plt.semilogy(Eb_No_dB, theoretical_BER, 'r--', label='Theoretical BER')
+# plt.xlabel('Eb/N0 (dB)')
+# plt.ylabel('Bit Error Rate (BER)')
+# plt.title('BER vs. Eb/N0 for BPSK in AWGN')
+# plt.legend()
+# plt.grid(True)
+# plt.show()
