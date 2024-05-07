@@ -26,22 +26,64 @@ def forward_propagation(X, parametres): # , activation):
     C = len(parametres) // 2 
     for c in range(1, C):
         Z = parametres['W' + str(c)].dot(activations['A' + str(c - 1)]) + parametres['b' + str(c)]
-        activations['A' + str(c)] = sigmoid(Z)
+        activations['A' + str(c)] = sigmoid(Z) # ReLU
     Z = parametres['W' + str(C)].dot(activations['A' + str(C - 1)]) + parametres['b' + str(C)]
-    activations['A' + str(C)] = sigmoid(Z) # ReLU
+    activations['A' + str(C)] = sigmoid(Z) 
     return activations
 
 def back_propagation(y, parametres, activations):
-  m = y.shape[1]
-  C = len(parametres) // 2
-  dZ = activations['A' + str(C)] - y
-  gradients = {}
-  for c in reversed(range(1, C + 1)):
-    gradients['dW' + str(c)] = 1/m * np.dot(dZ, activations['A' + str(c - 1)].T)
-    gradients['db' + str(c)] = 1/m * np.sum(dZ, axis=1, keepdims=True)
-    if c > 1:
-      dZ = np.dot(parametres['W' + str(c)].T, dZ) * activations['A' + str(c - 1)] * (1 - activations['A' + str(c - 1)])
-  return gradients
+    m = y.shape[1]
+    C = len(parametres) // 2
+    dZ = activations['A' + str(C)] - y
+    gradients = {}
+    for c in reversed(range(1, C + 1)):
+      gradients['dW' + str(c)] = 1/m * np.dot(dZ, activations['A' + str(c - 1)].T)
+      gradients['db' + str(c)] = 1/m * np.sum(dZ, axis=1, keepdims=True)
+      if c > 1:
+        dZ = np.dot(parametres['W' + str(c)].T, dZ) * activations['A' + str(c - 1)] * (1 - activations['A' + str(c - 1)])
+    return gradients
+
+# def back_propagation(y, parametres, activations):
+#     m = y.shape[1]
+#     C = len(parametres) // 2
+#     dZ = activations['A' + str(C)] - y
+#     gradients = {}
+  
+#     # sigmoid
+#     gradients['dW' + str(C)] = 1/m * np.dot(dZ, activations['A' + str(C-1)].T)
+#     gradients['db' + str(C)] = 1/m * np.sum(dZ, axis=1, keepdims=True)
+    
+#     dZ = np.dot(parametres['W' + str(C)].T, dZ) * activations['A' + str(C-1)] * (1 - activations['A' + str(C-1)])  # Simplifiable 
+#     # ReLU
+#     for c in reversed(range(1, C)): 
+#       gradients['dW' + str(c)] = 1/m * np.dot(dZ, (activations['A' + str(c)] > 0))
+#       gradients['db' + str(c)] = 1/m * np.sum(dZ, axis=1, keepdims=True)
+#       if c > 1:
+#         dZ = np.dot(parametres['W' + str(c)].T, dZ) * activations['A' + str(c - 1)] * (1 - activations['A' + str(c - 1)]) # Simlpifiable
+#     return gradients
+
+# def back_propagation(y, parameters, activations):
+#     m = y.shape[1]
+#     C = len(parameters) // 2
+#     dZ = activations['A' + str(C)] - y
+#     gradients = {}
+
+#     gradients['dW' + str(C)] = 1/m * np.dot(dZ, activations['A' + str(C-1)].T)
+#     gradients['db' + str(C)] = 1/m * np.sum(dZ, axis=1, keepdims=True)
+
+#     for c in reversed(range(1, C)):
+#         dA = np.dot(parameters['W' + str(c+1)].T, dZ)
+#         dZ = dA * (activations['A' + str(c)] > 0)  # Application de la dérivée de ReLU
+
+#         # if c > 1:
+#         A_prev = activations['A' + str(c-1)]
+#         # else:
+#         #     A_prev = activations['A0']  
+
+#         gradients['dW' + str(c)] = 1/m * np.dot(dZ, A_prev.T)
+#         gradients['db' + str(c)] = 1/m * np.sum(dZ, axis=1, keepdims=True)
+
+#     return gradients
 
 
 def update(gradients, parametres, learning_rate):
@@ -61,7 +103,7 @@ def predict(X, parametres):
 def update_learning_rate(initial_lr, epoch, decay_rate):
     return initial_lr * np.exp(-decay_rate * epoch)
 
-def deep_neural_network(X, y, hidden_layers = (128, 64, 32), learning_rate = 1, epochs = 2**12, sigma = 0):
+def deep_neural_network(X, y, hidden_layers = (128, 64, 32), learning_rate = 0.5, epochs = 2**14, sigma = 0):
     # initialisation parametres
     dimensions = list(hidden_layers)
     dimensions.insert(0, X.shape[0])
@@ -77,12 +119,12 @@ def deep_neural_network(X, y, hidden_layers = (128, 64, 32), learning_rate = 1, 
     # gradient descent
     for i in tqdm(range(epochs)):
         
-        lr = update_learning_rate(learning_rate, i, decay_rate=1/epochs)
+        #lr = update_learning_rate(learning_rate, i, decay_rate=1/epochs)
         
         X_bruite = X + np.random.normal(0, sigma, (m,n))             # ajout du bruit Gaussien à chauque itération
         activations = forward_propagation(X_bruite, parametres)
         gradients = back_propagation(y, parametres, activations)
-        parametres = update(gradients, parametres, lr)
+        parametres = update(gradients, parametres, learning_rate)
         Af = activations['A' + str(C)]
 
         # calcul du log_loss et de l'accuracy
@@ -209,7 +251,8 @@ print('dimensions de y:', Y_train.shape)
 # audio_thread = threading.Thread(target=play_audio, args=(audio_path, 1))
 # audio_thread.start()
 
-training_history, parametres = deep_neural_network(X_train, Y_train, epochs=2**10, sigma=0.9)
+
+training_history, parametres = deep_neural_network(X_train, Y_train, epochs=2**14, sigma=0.89)
 
 Y_calcule = predict(X_test, parametres)
 signal_recu = (Y_calcule.T).astype(int).flatten()
